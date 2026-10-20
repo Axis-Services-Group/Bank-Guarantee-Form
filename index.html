@@ -52,8 +52,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 .user{display:flex;align-items:center;gap:12px;flex:none}
 .user span{font-size:13px;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.app{flex:1;min-height:0;display:grid;grid-template-columns:minmax(380px,460px) 1fr}
-.side{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:0 0 40px}
+.app{flex:1;min-height:0;display:grid;grid-template-columns:minmax(380px,460px) 6px 1fr}
+/* drag handle between the controls and the preview; dragging sets an explicit width on .app */
+.split{cursor:col-resize;background:var(--bg);border-left:1px solid var(--line);position:relative;touch-action:none;transition:background .15s}
+.split:after{content:"";position:absolute;left:1px;top:50%;width:2px;height:36px;margin-top:-18px;border-radius:1px;background:#b9bbbd}
+.split:hover,.split.drag,.split:focus-visible{background:var(--line);outline:none}
+.split:hover:after,.split.drag:after,.split:focus-visible:after{background:var(--brand)}
+.side{background:var(--panel);overflow-y:auto;padding:0 0 40px;min-width:0}
 .top{padding:0 24px;position:sticky;top:0;background:var(--panel);z-index:5;border-bottom:1px solid var(--line)}
 .tabs{display:flex;gap:4px}
 .tab{flex:1;background:none;border:0;border-bottom:3px solid transparent;padding:14px 4px 11px;font:600 13.5px var(--head);color:var(--muted);cursor:pointer}
@@ -96,7 +101,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);b
 table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;margin-bottom:12px;max-height:300px;overflow-y:auto}
 .t th{position:sticky;top:0;background:var(--soft);text-align:left;font:700 12px var(--head);color:#4b4e50;padding:8px;border-bottom:1px solid var(--line)}
-.t td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;max-width:var(--td,92px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t td.w{max-width:var(--tdw,92px)}
 .t tbody tr:hover td{background:var(--soft)}
 .t tr.sel td{background:#e9eaea}
 .t tbody tr{cursor:pointer}
@@ -131,8 +137,8 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .pv-nav .sep{width:1px;height:22px;background:var(--line)}
 .pv-nav .msg{min-height:0;flex-basis:100%;text-align:center}
 .pv-nav .msg:empty{display:none}
-.pv-empty{padding:200px 80px;text-align:center;font:15px/1.5 var(--body);color:var(--muted)}
-.pv-empty b{display:block;color:var(--fg);font:700 17px var(--head);margin-bottom:6px}
+.pv-empty{padding:220px 70px;text-align:center;font:26px/1.5 var(--body);color:var(--muted)}
+.pv-empty b{display:block;color:var(--fg);font:700 32px/1.3 var(--head);margin-bottom:12px}
 .lnk{background:none;border:0;padding:0;color:var(--brand);font-weight:700;font-size:12px;text-decoration:underline;cursor:pointer}
 .lnk:hover{color:var(--fg)}
 .ecard{border:1px solid var(--brand);border-radius:8px;padding:12px 14px 4px;margin-bottom:14px;background:var(--panel)}
@@ -142,7 +148,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
   html,body{height:auto}
   .hdr{padding:10px 16px;gap:10px}.brand{gap:10px}.brand img{height:30px}.brand .ttl{padding-left:10px}.brand h1{font-size:15px}.brand p{display:none}
   .user span{display:none}
-  .app{grid-template-columns:1fr}.side{border-right:0;overflow:visible}.top,.pane{padding-left:16px;padding-right:16px}
+  .app{grid-template-columns:1fr!important}.split{display:none}.side{overflow:visible}.top,.pane{padding-left:16px;padding-right:16px}
   .main{padding:18px 16px}.chips{grid-template-columns:repeat(3,1fr)}
 }
 
@@ -277,6 +283,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
           <label><input type="checkbox" id="o-pdf" checked> PDF for each letter</label>
           <label><input type="checkbox" id="o-docx"> Word file for each letter</label>
           <label><input type="checkbox" id="o-comb" checked> Also one combined PDF of all letters</label>
+          <label><input type="checkbox" id="o-force"> Include letters that need fixing (for example an incomplete state profile)</label>
         </div>
         <div class="acts"><button class="btn pri" id="b-go" type="button">Generate letters</button></div>
         <div class="prog" aria-hidden="true"><div id="b-bar"></div></div>
@@ -325,6 +332,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
       </div>
     </div>
   </aside>
+  <div class="split" id="split" role="separator" aria-orientation="vertical" aria-label="Resize the controls panel" tabindex="0" title="Drag to resize. Double-click to reset."></div>
 
   <main class="main">
     <div class="pv-bar"><h3>Preview</h3><span class="info"><i class="sw" id="pv-sw"></i><span id="pv-info">Legal, 8.5 x 14 in</span></span></div>
@@ -669,7 +677,39 @@ function fitPreview(){
   const sc=Math.min(1,Math.max(.3,avail/816)); $('pvscale').style.transform='scale('+sc+')';
   w.style.width=(816*sc)+'px'; w.style.height=(1340*sc)+'px';
 }
-addEventListener('resize',fitPreview);
+addEventListener('resize',()=>{setSideWidth(sideW);fitPreview()});
+
+/* ---------- resizable controls panel ---------- */
+const SIDE_MIN=340, MAIN_MIN=320;
+let sideW=store.get('bgg.sidew.v1',0); // 0 = the default responsive width
+function setSideWidth(w){
+  const app=document.querySelector('.app');
+  if(!w){sideW=0; app.style.gridTemplateColumns=''; sizeBatchTable(); return}
+  sideW=Math.round(Math.max(SIDE_MIN,Math.min(app.clientWidth-MAIN_MIN,w)));
+  app.style.gridTemplateColumns=sideW+'px 6px 1fr'; sizeBatchTable();
+}
+// Batch table cells grow with the panel so long project and contractor names show in full when there is room.
+function sizeBatchTable(){
+  const w=document.querySelector('.side').clientWidth-48, unit=Math.max(92,(w-190)/3.4), side=document.querySelector('.side');
+  side.style.setProperty('--td',Math.round(unit)+'px'); side.style.setProperty('--tdw',Math.round(Math.max(92,unit*1.6))+'px');
+}
+function initSplit(){
+  const sp=$('split'), app=document.querySelector('.app');
+  const done=()=>{store.set('bgg.sidew.v1',sideW)};
+  sp.addEventListener('pointerdown',e=>{
+    e.preventDefault(); sp.setPointerCapture(e.pointerId); sp.classList.add('drag');
+    const left=app.getBoundingClientRect().left;
+    const move=ev=>{setSideWidth(ev.clientX-left);fitPreview()};
+    const up=()=>{sp.classList.remove('drag');sp.removeEventListener('pointermove',move);sp.removeEventListener('pointerup',up);sp.removeEventListener('pointercancel',up);done()};
+    sp.addEventListener('pointermove',move); sp.addEventListener('pointerup',up); sp.addEventListener('pointercancel',up);
+  });
+  sp.addEventListener('keydown',e=>{
+    if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return; e.preventDefault(); e.stopPropagation();
+    setSideWidth(document.querySelector('.side').getBoundingClientRect().width+(e.key==='ArrowRight'?40:-40)); fitPreview(); done();
+  });
+  sp.addEventListener('dblclick',()=>{setSideWidth(0);fitPreview();done()});
+  setSideWidth(sideW);
+}
 
 /* ---------- chips ---------- */
 function makeChips(id,get,set){
@@ -898,7 +938,7 @@ function renderBatchTable(){
   if(!batchRows.length){wrap.innerHTML='';$('b-out').hidden=true;return}
   let h='<div class="tw"><table class="t"><thead><tr><th>Row</th><th>State</th><th>Project</th><th>Head contractor</th><th>BGs</th><th>Status</th><th></th></tr></thead><tbody>';
   batchRows.forEach((r,i)=>{
-    h+='<tr data-i="'+i+'" class="'+(i===batchSel?'sel':'')+'"><td>'+r.n+'</td><td>'+esc(r.d.state)+'</td><td title="'+esc(r.d.project)+'">'+esc(r.d.project)+'</td><td>'+esc(r.d.recipient)+'</td><td>'+r.d.bgs.length+'</td><td>'+batchStatus(r)+'</td>'
+    h+='<tr data-i="'+i+'" class="'+(i===batchSel?'sel':'')+'"><td>'+r.n+'</td><td>'+esc(r.d.state)+'</td><td class="w" title="'+esc(r.d.project)+'">'+esc(r.d.project)+'</td><td class="w" title="'+esc(r.d.recipient)+'">'+esc(r.d.recipient)+'</td><td>'+r.d.bgs.length+'</td><td>'+batchStatus(r)+'</td>'
       +'<td><button class="lnk" type="button" aria-label="Edit row '+r.n+'">Edit</button></td></tr>';
   });
   h+='</tbody></table></div>';
@@ -912,9 +952,12 @@ function renderBatchTable(){
     tr.addEventListener('click',()=>goBatch(+tr.dataset.i));
     tr.querySelector('.lnk').addEventListener('click',e=>{e.stopPropagation();goBatch(+tr.dataset.i);openBatchEdit()});
   });
-  const ok=batchRows.filter(r=>!r.errors.length).length;
+  const ok=batchRows.filter(batchUsable).length;
   $('b-out').hidden=false; $('b-go').textContent='Generate '+ok+' letter'+(ok===1?'':'s'); $('b-go').disabled=!ok;
 }
+// A letter needs a state and at least one guarantee to be drawn at all; the override covers everything else.
+const canDraw = r=>!!(r.d.state&&r.d.bgs.length);
+const batchUsable = r=>!r.errors.length||($('o-force').checked&&canDraw(r));
 function batchStatus(r){
   if(r.errors.length) return '<span class="pill err" title="'+esc(r.errors.join('; '))+'">'+esc(r.errors[0])+'</span>';
   if(r.warnings.length) return '<span class="pill warn" title="'+esc(r.warnings.join('; '))+'">'+esc(r.warnings[0])+'</span>';
@@ -922,7 +965,7 @@ function batchStatus(r){
 }
 function previewBatchRow(){
   const r=batchRows[batchSel]; updateBatchNav(); if(!r) return;
-  if(r.d.state&&r.d.bgs.length){showPreview(buildLetter(r.d));return}
+  if(canDraw(r)){showPreview(buildLetter(r.d));return}
   // nothing sensible to draw: say why instead of leaving the previous letter on screen
   ++pvToken; currentLetter=null;
   $('pvscale').innerHTML='<div class="pg"><div class="pv-empty"><b>Row '+r.n+' cannot be previewed yet</b>'+esc(r.errors.join('; '))+'.<br>Use Edit to fix it.</div></div>';
@@ -930,10 +973,10 @@ function previewBatchRow(){
 }
 function updateBatchNav(){
   const show=curTab==='batch'&&batchRows.length>0; $('pv-nav').hidden=!show; if(!show) return;
-  const r=batchRows[batchSel], bad=r.errors.length>0;
+  const r=batchRows[batchSel], bad=!batchUsable(r);
   $('pv-pos').innerHTML='Letter '+(batchSel+1)+' of '+batchRows.length+' <span class="pill" style="color:var(--muted)">Row '+r.n+'</span>'+batchStatus(r);
   $('pv-prev').disabled=batchSel<=0; $('pv-next').disabled=batchSel>=batchRows.length-1;
-  ['pv-pdf','pv-docx'].forEach(id=>{$(id).disabled=bad; $(id).title=bad?'Fix this letter first: '+r.errors.join('; '):''});
+  ['pv-pdf','pv-docx'].forEach(id=>{$(id).disabled=bad; $(id).title=bad?'Fix this letter first'+(canDraw(r)?', or tick "Include letters that need fixing"':'')+': '+r.errors.join('; '):''});
 }
 function goBatch(i){
   if(!batchRows.length) return;
@@ -990,7 +1033,7 @@ function renderBatchBgs(){
 }
 async function batchExport(kind){
   const r=batchRows[batchSel], msg=$('pv-msg'); if(!r) return;
-  if(r.errors.length){msg.className='msg err';msg.textContent='Fix this letter first: '+r.errors.join('; ')+'.';return}
+  if(!batchUsable(r)){msg.className='msg err';msg.textContent='Fix this letter first: '+r.errors.join('; ')+'.';return}
   msg.className='msg';msg.textContent='Preparing...';
   try{
     const L=buildLetter(r.d); remember(r.d);
@@ -1006,13 +1049,13 @@ async function handleFile(file){
     batchRows=res.rows; batchSel=0; $('b-edit').hidden=true; $('pv-msg').textContent='';
     const bad=batchRows.filter(r=>r.errors.length).length;
     msg.className='msg '+(bad?'':'ok');
-    msg.textContent=batchRows.length+' row'+(batchRows.length===1?'':'s')+' read'+(res.profilesUpdated?', '+res.profilesUpdated+' state profile'+(res.profilesUpdated===1?'':'s')+' updated':'')+(bad?'. '+bad+' need fixing and will be skipped.':'.');
+    msg.textContent=batchRows.length+' row'+(batchRows.length===1?'':'s')+' read'+(res.profilesUpdated?', '+res.profilesUpdated+' state profile'+(res.profilesUpdated===1?'':'s')+' updated':'')+(bad?'. '+bad+' need fixing. Fix them with Edit, or tick "Include letters that need fixing" to generate them anyway.':'.');
     if(!batchRows.length){msg.className='msg err';msg.textContent='No data rows found. Use the template columns.'}
     renderBatchTable(); previewBatchRow(); tabRefresh();
   }catch(err){console.error(err);msg.className='msg err';msg.textContent='Could not read that file: '+err.message}
 }
 async function runBatch(){
-  const rows=batchRows.filter(r=>!r.errors.length); if(!rows.length) return;
+  const rows=batchRows.filter(batchUsable); if(!rows.length) return;
   const doPdf=$('o-pdf').checked, doDocx=$('o-docx').checked, doComb=$('o-comb').checked&&doPdf;
   const prog=$('b-prog'), bar=$('b-bar'); if(!doPdf&&!doDocx){prog.className='msg err';prog.textContent='Choose PDF, Word or both.';return}
   $('b-go').disabled=true; prog.className='msg'; bar.style.width='0%';
@@ -1082,6 +1125,8 @@ function init(){
   ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
   drop.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
   $('b-go').addEventListener('click',runBatch);
+  $('o-force').checked=store.get('bgg.force.v1',false);
+  $('o-force').addEventListener('change',e=>{store.set('bgg.force.v1',e.target.checked);$('pv-msg').textContent='';if(batchRows.length){renderBatchTable();updateBatchNav()}});
   // batch: flip through letters, edit one, download one
   const bd=()=>batchRows[batchSel].d;
   makeChips('chips-batch',()=>batchRows[batchSel]?batchRows[batchSel].d.state:'',c=>{bd().state=c;batchSignPlaceholders();batchEdited()});
@@ -1102,6 +1147,7 @@ function init(){
     if(e.target.closest&&e.target.closest('input,textarea,select,[contenteditable]')) return;
     if(e.key==='ArrowLeft'){e.preventDefault();goBatch(batchSel-1)} else if(e.key==='ArrowRight'){e.preventDefault();goBatch(batchSel+1)}
   });
+  initSplit();
   loadProfileForm(); singleUpdate();
 }
 function initAuth(){
