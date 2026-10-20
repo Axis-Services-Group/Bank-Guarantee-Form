@@ -122,6 +122,22 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 #pvwrap{position:relative;box-shadow:0 2px 10px var(--paper-shadow);border:1px solid var(--line);background:#fff;flex:none}
 #pvscale{transform-origin:0 0;width:816px;height:1340px}
 .sr{position:absolute;left:-99999px}
+/* batch: flip through letters under the preview, and edit one letter */
+.pv-nav{position:sticky;bottom:12px;z-index:3;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;max-width:880px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.pv-nav[hidden]{display:none}
+.pv-nav .arrow{font-size:16px;line-height:1;padding:6px 14px}
+.pv-nav .pos{font-size:13px;font-weight:700;min-width:150px;text-align:center}
+.pv-nav .pos .pill{margin-left:6px}
+.pv-nav .sep{width:1px;height:22px;background:var(--line)}
+.pv-nav .msg{min-height:0;flex-basis:100%;text-align:center}
+.pv-nav .msg:empty{display:none}
+.pv-empty{padding:200px 80px;text-align:center;font:15px/1.5 var(--body);color:var(--muted)}
+.pv-empty b{display:block;color:var(--fg);font:700 17px var(--head);margin-bottom:6px}
+.lnk{background:none;border:0;padding:0;color:var(--brand);font-weight:700;font-size:12px;text-decoration:underline;cursor:pointer}
+.lnk:hover{color:var(--fg)}
+.ecard{border:1px solid var(--brand);border-radius:8px;padding:12px 14px 4px;margin-bottom:14px;background:var(--panel)}
+.ecard .ehd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ecard .ehd .lbl{font:700 14px var(--head);color:var(--fg)}
 @media (max-width:720px){
   html,body{height:auto}
   .hdr{padding:10px 16px;gap:10px}.brand{gap:10px}.brand img{height:30px}.brand .ttl{padding-left:10px}.brand h1{font-size:15px}.brand p{display:none}
@@ -238,6 +254,22 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
         <input type="file" id="file" accept=".xlsx,.xls,.csv" class="sr">
         <div class="msg" id="b-msg" role="status"></div>
         <div id="b-table"></div>
+        <div class="ecard" id="b-edit" hidden>
+          <div class="ehd"><span class="lbl" id="be-which">Edit letter</span><button class="btn sm" id="be-done" type="button">Done</button></div>
+          <p class="hint">Changes apply to this letter only. The spreadsheet is not changed.</p>
+          <div class="lbl" style="margin-bottom:6px">State</div>
+          <div class="chips" id="chips-batch" role="radiogroup" aria-label="State"></div>
+          <div class="f"><label for="be-date">Date</label><input type="date" id="be-date"></div>
+          <div class="f"><label for="be-recipient">Head contractor</label><input type="text" id="be-recipient" list="dl-recipients"></div>
+          <div class="f"><label for="be-project">Project name</label><input type="text" id="be-project" list="dl-projects"></div>
+          <div class="lbl" style="margin-bottom:6px">Bank guarantees</div>
+          <div id="be-bgs"></div>
+          <div class="acts"><button class="btn sm" id="be-addbg" type="button">Add guarantee</button></div>
+          <div class="row">
+            <div class="f"><label for="be-sname">Signatory name</label><input type="text" id="be-sname"></div>
+            <div class="f"><label for="be-stitle">Signatory title</label><input type="text" id="be-stitle"></div>
+          </div>
+        </div>
       </div>
       <div class="sec" id="b-out" hidden>
         <h2><span class="n">03</span>Generate</h2>
@@ -297,6 +329,16 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
   <main class="main">
     <div class="pv-bar"><h3>Preview</h3><span class="info"><i class="sw" id="pv-sw"></i><span id="pv-info">Legal, 8.5 x 14 in</span></span></div>
     <div id="pvwrap"><div id="pvscale"></div></div>
+    <div class="pv-nav" id="pv-nav" hidden>
+      <button class="btn sm arrow" id="pv-prev" type="button" aria-label="Previous letter">&#8592;</button>
+      <span class="pos" id="pv-pos" role="status"></span>
+      <button class="btn sm arrow" id="pv-next" type="button" aria-label="Next letter">&#8594;</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn sm" id="pv-edit" type="button">Edit</button>
+      <button class="btn sm" id="pv-pdf" type="button">PDF</button>
+      <button class="btn sm" id="pv-docx" type="button">Word</button>
+      <span class="msg" id="pv-msg" role="status"></span>
+    </div>
   </main>
 </div>
 <div id="stage" style="position:fixed;left:-10000px;top:0;width:816px;height:1340px;background:#fff"></div>
@@ -854,23 +896,114 @@ function parseWorkbook(wb){
 function renderBatchTable(){
   const wrap=$('b-table');
   if(!batchRows.length){wrap.innerHTML='';$('b-out').hidden=true;return}
-  let h='<div class="tw"><table class="t"><thead><tr><th>Row</th><th>State</th><th>Project</th><th>Head contractor</th><th>BGs</th><th>Status</th></tr></thead><tbody>';
+  let h='<div class="tw"><table class="t"><thead><tr><th>Row</th><th>State</th><th>Project</th><th>Head contractor</th><th>BGs</th><th>Status</th><th></th></tr></thead><tbody>';
   batchRows.forEach((r,i)=>{
-    const st=r.errors.length?'<span class="pill err" title="'+esc(r.errors.join('; '))+'">'+esc(r.errors[0])+'</span>':(r.warnings.length?'<span class="pill warn" title="'+esc(r.warnings.join('; '))+'">'+esc(r.warnings[0])+'</span>':'<span class="pill ok">Ready</span>');
-    h+='<tr data-i="'+i+'" class="'+(i===batchSel?'sel':'')+'"><td>'+r.n+'</td><td>'+esc(r.d.state)+'</td><td title="'+esc(r.d.project)+'">'+esc(r.d.project)+'</td><td>'+esc(r.d.recipient)+'</td><td>'+r.d.bgs.length+'</td><td>'+st+'</td></tr>';
+    h+='<tr data-i="'+i+'" class="'+(i===batchSel?'sel':'')+'"><td>'+r.n+'</td><td>'+esc(r.d.state)+'</td><td title="'+esc(r.d.project)+'">'+esc(r.d.project)+'</td><td>'+esc(r.d.recipient)+'</td><td>'+r.d.bgs.length+'</td><td>'+batchStatus(r)+'</td>'
+      +'<td><button class="lnk" type="button" aria-label="Edit row '+r.n+'">Edit</button></td></tr>';
   });
   h+='</tbody></table></div>';
+  const oldTw=wrap.querySelector('.tw'), keepTop=oldTw?oldTw.scrollTop:0;
   wrap.innerHTML=h;
-  wrap.querySelectorAll('tbody tr').forEach(tr=>tr.addEventListener('click',()=>{batchSel=+tr.dataset.i;renderBatchTable();previewBatchRow()}));
+  // keep the table's scroll position and bring the selected row into view inside it (not the whole side panel)
+  const tw=wrap.querySelector('.tw'), sel=tw.querySelector('tr.sel'); tw.scrollTop=keepTop;
+  if(sel){const hh=tw.querySelector('thead').offsetHeight, top=sel.offsetTop;
+    if(top-hh<tw.scrollTop) tw.scrollTop=top-hh; else if(top+sel.offsetHeight>tw.scrollTop+tw.clientHeight) tw.scrollTop=top+sel.offsetHeight-tw.clientHeight;}
+  wrap.querySelectorAll('tbody tr').forEach(tr=>{
+    tr.addEventListener('click',()=>goBatch(+tr.dataset.i));
+    tr.querySelector('.lnk').addEventListener('click',e=>{e.stopPropagation();goBatch(+tr.dataset.i);openBatchEdit()});
+  });
   const ok=batchRows.filter(r=>!r.errors.length).length;
   $('b-out').hidden=false; $('b-go').textContent='Generate '+ok+' letter'+(ok===1?'':'s'); $('b-go').disabled=!ok;
 }
-function previewBatchRow(){const r=batchRows[batchSel]; if(r&&r.d.state&&r.d.bgs.length) showPreview(buildLetter(r.d))}
+function batchStatus(r){
+  if(r.errors.length) return '<span class="pill err" title="'+esc(r.errors.join('; '))+'">'+esc(r.errors[0])+'</span>';
+  if(r.warnings.length) return '<span class="pill warn" title="'+esc(r.warnings.join('; '))+'">'+esc(r.warnings[0])+'</span>';
+  return '<span class="pill ok">'+(r.edited?'Edited':'Ready')+'</span>';
+}
+function previewBatchRow(){
+  const r=batchRows[batchSel]; updateBatchNav(); if(!r) return;
+  if(r.d.state&&r.d.bgs.length){showPreview(buildLetter(r.d));return}
+  // nothing sensible to draw: say why instead of leaving the previous letter on screen
+  ++pvToken; currentLetter=null;
+  $('pvscale').innerHTML='<div class="pg"><div class="pv-empty"><b>Row '+r.n+' cannot be previewed yet</b>'+esc(r.errors.join('; '))+'.<br>Use Edit to fix it.</div></div>';
+  $('pv-sw').style.background=''; $('pv-info').textContent='Legal, 8.5 × 14 in'; fitPreview();
+}
+function updateBatchNav(){
+  const show=curTab==='batch'&&batchRows.length>0; $('pv-nav').hidden=!show; if(!show) return;
+  const r=batchRows[batchSel], bad=r.errors.length>0;
+  $('pv-pos').innerHTML='Letter '+(batchSel+1)+' of '+batchRows.length+' <span class="pill" style="color:var(--muted)">Row '+r.n+'</span>'+batchStatus(r);
+  $('pv-prev').disabled=batchSel<=0; $('pv-next').disabled=batchSel>=batchRows.length-1;
+  ['pv-pdf','pv-docx'].forEach(id=>{$(id).disabled=bad; $(id).title=bad?'Fix this letter first: '+r.errors.join('; '):''});
+}
+function goBatch(i){
+  if(!batchRows.length) return;
+  batchSel=Math.max(0,Math.min(batchRows.length-1,i)); $('pv-msg').textContent='';
+  renderBatchTable(); previewBatchRow(); if(!$('b-edit').hidden) fillBatchEdit();
+}
+// Same checks as parseWorkbook, run again after a letter is edited.
+function revalidateBatchRow(r){
+  const d=r.d, e=[];
+  if(!d.state) e.push('state missing');
+  if(!d.recipient) e.push('head contractor missing'); if(!d.project) e.push('project name missing');
+  if(!d.bgs.length) e.push('no BG numbers');
+  d.bgs.forEach((b,i)=>{if(!b.no) e.push('BG '+(i+1)+' has no number'); else if(!(b.amt>0)) e.push('BG '+b.no+' has no value')});
+  if(d.state){const p=profiles[d.state]; if(!p.entity||!p.abn) e.push(d.state+' profile incomplete');}
+  r.errors=e;
+}
+function batchEdited(){
+  const r=batchRows[batchSel]; r.edited=true; revalidateBatchRow(r);
+  renderBatchTable(); previewBatchRow();
+}
+
+/* edit one batch letter */
+function openBatchEdit(){
+  if(!batchRows.length) return;
+  $('b-edit').hidden=false; fillBatchEdit();
+  $('b-edit').scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function fillBatchEdit(){
+  const r=batchRows[batchSel], d=r.d;
+  $('be-which').textContent='Edit letter '+(batchSel+1)+' (row '+r.n+')';
+  refreshChips('chips-batch',()=>d.state);
+  $('be-date').value=strToIso(d.date); $('be-recipient').value=d.recipient; $('be-project').value=d.project;
+  $('be-sname').value=d.signName; $('be-stitle').value=d.signTitle; batchSignPlaceholders();
+  renderBatchBgs();
+}
+function batchSignPlaceholders(){
+  const p=profiles[batchRows[batchSel].d.state]||{};
+  $('be-sname').placeholder=p.signName||''; $('be-stitle').placeholder=p.signTitle||'';
+}
+function renderBatchBgs(){
+  const bgs=batchRows[batchSel].d.bgs, box=$('be-bgs'); box.innerHTML='';
+  bgs.forEach((b,i)=>{
+    const d=document.createElement('div'); d.className='bgrow';
+    d.innerHTML='<div class="f"><label for="be-n'+i+'">BG number</label><input type="text" class="mono" id="be-n'+i+'" value="'+esc(b.no)+'"></div>'
+      +'<div class="f"><label for="be-t'+i+'">Type</label><input type="text" id="be-t'+i+'" value="'+esc(b.type)+'" list="dl-types" placeholder="PC"></div>'
+      +'<div class="f"><label for="be-v'+i+'">Value</label><input type="text" class="mono" id="be-v'+i+'" inputmode="decimal" value="'+(b.amt?fmtMoney(b.amt):'')+'"></div>'
+      +'<button class="x" type="button" aria-label="Remove guarantee '+(i+1)+'" '+(bgs.length<2?'disabled':'')+'>&times;</button>';
+    d.querySelector('#be-n'+i).addEventListener('input',e=>{b.no=e.target.value.trim();batchEdited()});
+    d.querySelector('#be-t'+i).addEventListener('input',e=>{b.type=e.target.value.trim();batchEdited()});
+    d.querySelector('#be-v'+i).addEventListener('input',e=>{const v=parseMoney(e.target.value);b.amt=isNaN(v)?0:v;batchEdited()});
+    d.querySelector('.x').addEventListener('click',()=>{bgs.splice(i,1);renderBatchBgs();batchEdited()});
+    box.appendChild(d);
+  });
+}
+async function batchExport(kind){
+  const r=batchRows[batchSel], msg=$('pv-msg'); if(!r) return;
+  if(r.errors.length){msg.className='msg err';msg.textContent='Fix this letter first: '+r.errors.join('; ')+'.';return}
+  msg.className='msg';msg.textContent='Preparing...';
+  try{
+    const L=buildLetter(r.d); remember(r.d);
+    if(kind==='pdf') downloadBlob(new Blob([await buildPdf(L)],{type:'application/pdf'}),fileBase(L)+'.pdf');
+    else downloadBlob(new Blob([await buildDocx(L)],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),fileBase(L)+'.docx');
+    msg.className='msg ok';msg.textContent='Downloaded.';
+  }catch(err){console.error(err);msg.className='msg err';msg.textContent='Could not create the file: '+err.message}
+}
 async function handleFile(file){
   if(!file) return; const msg=$('b-msg'); msg.className='msg'; msg.textContent='Reading '+file.name+'...';
   try{
     const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'}); const res=parseWorkbook(wb);
-    batchRows=res.rows; batchSel=0;
+    batchRows=res.rows; batchSel=0; $('b-edit').hidden=true; $('pv-msg').textContent='';
     const bad=batchRows.filter(r=>r.errors.length).length;
     msg.className='msg '+(bad?'':'ok');
     msg.textContent=batchRows.length+' row'+(batchRows.length===1?'':'s')+' read'+(res.profilesUpdated?', '+res.profilesUpdated+' state profile'+(res.profilesUpdated===1?'':'s')+' updated':'')+(bad?'. '+bad+' need fixing and will be skipped.':'.');
@@ -915,6 +1048,7 @@ function setTab(t){
   tabRefresh();
 }
 function tabRefresh(){
+  updateBatchNav();
   if(curTab==='single') singleUpdate();
   else if(curTab==='batch'){ if(batchRows.length) previewBatchRow(); else singleUpdate(); }
   else showPreview(buildLetter(Object.assign(singleData(),{state:pState})));
@@ -948,6 +1082,26 @@ function init(){
   ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
   drop.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
   $('b-go').addEventListener('click',runBatch);
+  // batch: flip through letters, edit one, download one
+  const bd=()=>batchRows[batchSel].d;
+  makeChips('chips-batch',()=>batchRows[batchSel]?batchRows[batchSel].d.state:'',c=>{bd().state=c;batchSignPlaceholders();batchEdited()});
+  $('be-date').addEventListener('input',e=>{
+    const r=batchRows[batchSel]; r.d.date=isoToStr(e.target.value)||todayStr();
+    r.warnings=r.warnings.filter(w=>!/^no date/.test(w)); if(!e.target.value) r.warnings.push('no date, using today');
+    batchEdited();
+  });
+  [['be-recipient','recipient'],['be-project','project'],['be-sname','signName'],['be-stitle','signTitle']].forEach(([id,k])=>
+    $(id).addEventListener('input',e=>{bd()[k]=e.target.value.trim();batchEdited()}));
+  $('be-addbg').addEventListener('click',()=>{const bgs=bd().bgs;bgs.push({no:'',type:'',amt:bgs.length?bgs[0].amt:0});renderBatchBgs();batchEdited();$('be-n'+(bgs.length-1)).focus()});
+  $('be-done').addEventListener('click',()=>{$('b-edit').hidden=true});
+  $('pv-prev').addEventListener('click',()=>goBatch(batchSel-1)); $('pv-next').addEventListener('click',()=>goBatch(batchSel+1));
+  $('pv-edit').addEventListener('click',openBatchEdit);
+  $('pv-pdf').addEventListener('click',()=>batchExport('pdf')); $('pv-docx').addEventListener('click',()=>batchExport('docx'));
+  document.addEventListener('keydown',e=>{
+    if(curTab!=='batch'||!batchRows.length||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey) return;
+    if(e.target.closest&&e.target.closest('input,textarea,select,[contenteditable]')) return;
+    if(e.key==='ArrowLeft'){e.preventDefault();goBatch(batchSel-1)} else if(e.key==='ArrowRight'){e.preventDefault();goBatch(batchSel+1)}
+  });
   loadProfileForm(); singleUpdate();
 }
 function initAuth(){
