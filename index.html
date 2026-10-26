@@ -282,9 +282,11 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
         <div class="opts">
           <label><input type="checkbox" id="o-pdf" checked> PDF for each letter</label>
           <label><input type="checkbox" id="o-docx"> Word file for each letter</label>
-          <label><input type="checkbox" id="o-comb" checked> Also one combined PDF of all letters</label>
+          <label><input type="checkbox" id="o-comb"> Also one combined PDF of all letters</label>
+          <label><input type="checkbox" id="o-zip"> Put the files in one zip instead of downloading them separately</label>
           <label><input type="checkbox" id="o-force"> Include letters that need fixing (for example an incomplete state profile)</label>
         </div>
+        <p class="hint">Each letter is its own file, named after the project. Your browser may ask once to allow this site to download multiple files.</p>
         <div class="acts"><button class="btn pri" id="b-go" type="button">Generate letters</button></div>
         <div class="prog" aria-hidden="true"><div id="b-bar"></div></div>
         <div class="msg" id="b-prog" role="status"></div>
@@ -648,13 +650,14 @@ async function buildPdf(L){
   const el=stage.firstChild;
   const buf=await html2pdf().set({
     margin:0, image:{type:'jpeg',quality:0.95},
-    html2canvas:{scale:2.5,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0,windowWidth:816},
+    // pin the capture to the page box: without x/y/width/height the letter comes out shifted left and cut off
+    html2canvas:{scale:2.5,useCORS:true,backgroundColor:'#ffffff',x:0,y:0,width:816,height:1340,scrollX:0,scrollY:0,windowWidth:816,windowHeight:1340},
     jsPDF:{unit:'in',format:[8.5,14],orientation:'portrait'}, pagebreak:{mode:'avoid-all'}
   }).from(el).outputPdf('arraybuffer');
   stage.innerHTML='';
   return new Uint8Array(buf);
 }
-function fileBase(L){return safeName('BG '+(L.bgs[0]?L.bgs[0].no:'')+' - '+L.project)}
+function fileBase(L){return safeName(L.project).replace(/[. ]+$/,'')||'Bank guarantee letter'}
 
 /* ---------- preview ---------- */
 let currentLetter=null, pvToken=0;
@@ -1056,29 +1059,36 @@ async function handleFile(file){
 }
 async function runBatch(){
   const rows=batchRows.filter(batchUsable); if(!rows.length) return;
-  const doPdf=$('o-pdf').checked, doDocx=$('o-docx').checked, doComb=$('o-comb').checked&&doPdf;
+  const doPdf=$('o-pdf').checked, doDocx=$('o-docx').checked, doComb=$('o-comb').checked&&doPdf, doZip=$('o-zip').checked;
   const prog=$('b-prog'), bar=$('b-bar'); if(!doPdf&&!doDocx){prog.className='msg err';prog.textContent='Choose PDF, Word or both.';return}
   $('b-go').disabled=true; prog.className='msg'; bar.style.width='0%';
-  const zip=new JSZip(), used={}, pdfs=[]; let done=0; const total=rows.length;
+  const zip=new JSZip(), used={}, pdfs=[]; let done=0, files=0; const total=rows.length;
+  // Each letter is its own file. Separate downloads are spaced out so the browser does not drop any of them.
+  const out=async(blob,name)=>{files++; if(doZip) zip.file(name,blob); else {downloadBlob(blob,name); await sleep(800)}};
   try{
     for(const r of rows){
       const L=buildLetter(r.d); remember(r.d);
       let base=fileBase(L); used[base]=(used[base]||0)+1; if(used[base]>1) base+=' ('+used[base]+')';
       prog.textContent='Letter '+(done+1)+' of '+total+': '+r.d.project;
-      if(doPdf){const b=await buildPdf(L); zip.file(base+'.pdf',b); if(doComb) pdfs.push(b)}
-      if(doDocx){zip.file(base+'.docx',await buildDocx(L))}
+      if(doPdf){const b=await buildPdf(L); if(doComb) pdfs.push(b); await out(new Blob([b],{type:'application/pdf'}),base+'.pdf')}
+      if(doDocx) await out(new Blob([await buildDocx(L)],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),base+'.docx');
       done++; bar.style.width=(done/total*100)+'%'; await sleep(0);
     }
     if(doComb&&pdfs.length){
       prog.textContent='Combining PDFs...';
-      const out=await PDFLib.PDFDocument.create();
-      for(const b of pdfs){const src=await PDFLib.PDFDocument.load(b);const pgs=await out.copyPages(src,src.getPageIndices());pgs.forEach(p=>out.addPage(p))}
-      zip.file('All bank guarantee letters.pdf',await out.save());
+      const all=await PDFLib.PDFDocument.create();
+      for(const b of pdfs){const src=await PDFLib.PDFDocument.load(b);const pgs=await all.copyPages(src,src.getPageIndices());pgs.forEach(p=>all.addPage(p))}
+      await out(new Blob([await all.save()],{type:'application/pdf'}),'All bank guarantee letters.pdf');
     }
-    prog.textContent='Zipping...';
-    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
-    const d=new Date(); downloadBlob(blob,'Bank Guarantee Letters '+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'.zip');
-    prog.className='msg ok'; prog.textContent=total+' letter'+(total===1?'':'s')+' created and downloaded as a zip.';
+    const n=total+' letter'+(total===1?'':'s');
+    if(doZip){
+      prog.textContent='Zipping...';
+      const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+      const d=new Date(); downloadBlob(blob,'Bank Guarantee Letters '+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'.zip');
+      prog.className='msg ok'; prog.textContent=n+' created and downloaded as a zip.';
+    }else{
+      prog.className='msg ok'; prog.textContent=n+' created: '+files+' file'+(files===1?'':'s')+' downloaded. If some are missing, allow this site to download multiple files in your browser and generate again.';
+    }
   }catch(err){console.error(err);prog.className='msg err';prog.textContent='Stopped at letter '+(done+1)+': '+err.message}
   finally{$('b-go').disabled=false}
 }
