@@ -81,6 +81,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);b
 .chip{border:1px solid var(--line);background:var(--field);border-radius:6px;padding:8px 0 0;cursor:pointer;font:700 12.5px var(--head);color:#4b4e50;display:flex;flex-direction:column;align-items:center;gap:7px;overflow:hidden;transition:border-color .15s}
 .chip:hover{border-color:#b9bbbd}
 .chip i{display:block;width:100%;height:5px;background:var(--c)}
+.chips .cos{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .chip[aria-checked=true]{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand);color:var(--fg);background:var(--soft)}
 .bgrow{display:grid;grid-template-columns:1.4fr .8fr 1fr 36px;gap:8px;align-items:end;margin-bottom:8px}
 .bgrow .f{margin:0}
@@ -203,8 +204,8 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
     <div class="pane" id="pane-single" role="tabpanel" aria-labelledby="tab-single">
       <div class="sec">
         <h2><span class="n">01</span>State and project</h2>
-        <div class="lbl" style="margin-bottom:6px">State (sets logo and letterhead)</div>
-        <div class="chips" id="chips-single" role="radiogroup" aria-label="State"></div>
+        <div class="lbl" style="margin-bottom:6px">State or company (sets logo and letterhead)</div>
+        <div class="chips" id="chips-single" role="radiogroup" aria-label="State or company"></div>
         <div class="row">
           <div class="f"><label for="s-date">Date</label><input type="date" id="s-date"></div>
           <div class="f"><label for="s-value">BG value ($)</label><input type="text" id="s-value" class="mono" inputmode="decimal" placeholder="289,918.59"></div>
@@ -263,8 +264,8 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
         <div class="ecard" id="b-edit" hidden>
           <div class="ehd"><span class="lbl" id="be-which">Edit letter</span><button class="btn sm" id="be-done" type="button">Done</button></div>
           <p class="hint">Changes apply to this letter only. The spreadsheet is not changed.</p>
-          <div class="lbl" style="margin-bottom:6px">State</div>
-          <div class="chips" id="chips-batch" role="radiogroup" aria-label="State"></div>
+          <div class="lbl" style="margin-bottom:6px">State or company</div>
+          <div class="chips" id="chips-batch" role="radiogroup" aria-label="State or company"></div>
           <div class="f"><label for="be-date">Date</label><input type="date" id="be-date"></div>
           <div class="f"><label for="be-recipient">Head contractor</label><input type="text" id="be-recipient" list="dl-recipients"></div>
           <div class="f"><label for="be-project">Project name</label><input type="text" id="be-project" list="dl-projects"></div>
@@ -296,8 +297,8 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
     <!-- PROFILES -->
     <div class="pane" id="pane-prof" role="tabpanel" aria-labelledby="tab-prof" hidden>
       <div class="sec">
-        <h2><span class="n">01</span>State</h2>
-        <div class="chips" id="chips-prof" role="radiogroup" aria-label="State profile"></div>
+        <h2><span class="n">01</span>State or company</h2>
+        <div class="chips" id="chips-prof" role="radiogroup" aria-label="State or company profile"></div>
         <p class="hint" id="p-status"></p>
       </div>
       <div class="sec">
@@ -371,8 +372,16 @@ const STATES = [
   {code:'VIC',colour:'#d22630',name:'VIC'},
   {code:'WA', colour:'#decd63',name:'WA'},
   {code:'NZ', colour:'#201820',name:'NZ'},
-  {code:'GROUP',colour:'#8a8d8f',name:'Group'}
+  {code:'GROUP',colour:'#8a8d8f',name:'Group'},
+  // Other Axis companies. Each has its own profile; logo is the state logo it uses (Group when the company has no state).
+  {code:'SMALLWORKS',colour:'#8a8d8f',name:'Axis Plumbing Small Works Group',label:'Small Works',logo:'GROUP',co:1},
+  {code:'SIXAVIC',   colour:'#d22630',name:'SIXA Services VIC',label:'SIXA VIC',logo:'VIC',co:1},
+  {code:'MEDGAS',    colour:'#8a8d8f',name:'Axis Medical Gases',label:'Medical Gases',logo:'GROUP',co:1},
+  {code:'CONSULTING',colour:'#8a8d8f',name:'Axis Consulting Services',label:'Consulting',logo:'GROUP',co:1},
+  {code:'CENTRALCOAST',colour:'#6cc24a',name:'Axis Plumbing Central Coast',label:'Central Coast',logo:'NSW',co:1},
+  {code:'FIRENSW',   colour:'#6cc24a',name:'Axis Fire NSW',label:'Fire NSW',logo:'NSW',co:1}
 ];
+const stateLabel = c=>{const s=STATES.find(x=>x.code===c); return s?(s.label||s.name):c};
 const STATE_ALIASES = {
   'victoria':'VIC','new south wales':'NSW','queensland':'QLD','south australia':'SA','western australia':'WA',
   'northern territory':'NT','australian capital territory':'ACT','new zealand':'NZ','group':'GROUP','axis group':'GROUP','grp':'GROUP'
@@ -394,6 +403,17 @@ const DEFAULT_PROFILES = (()=>{
   set('NT',{a1:'190 Beard Road',a2:'HUMPTY DOO NT 0836',phone:'+61 421 242 557'});
   set('SA',{a1:'2/21 Alfred Avenue',a2:'BEVERLEY SA 5009',phone:'+61 417 808 191'});
   set('NZ',{a1:'20D Sylvia Park Road',a2:'MOUNT WELLINGTON, AUCKLAND',phone:'+64 9 573 1171'});
+  set('QLD',{abn:'56 165 581 475'});
+  // Companies: own name and ABN; office address from the state in the name (NSW office otherwise); slip return
+  // address and signatory as for VIC. All editable in State profiles.
+  const co=(c,entity,abn,office)=>{const src=o[office];
+    set(c,{entity,abn,a1:src.a1,a2:src.a2,a3:src.a3,a4:src.a4,phone:src.phone,returnTo:o.VIC.returnTo,signName:o.VIC.signName,signTitle:o.VIC.signTitle})};
+  co('SMALLWORKS','Axis Plumbing Small Works Group Pty Ltd','65 111 828 641','NSW');
+  co('SIXAVIC','SIXA Services VIC Pty Ltd','18 644 613 258','VIC');
+  co('MEDGAS','Axis Medical Gases Pty Ltd','31 604 062 259','NSW');
+  co('CONSULTING','Axis Consulting Services Pty Ltd','80 624 016 888','NSW');
+  co('CENTRALCOAST','Axis Plumbing Central Coast Pty Ltd','21 611 702 955','NSW');
+  co('FIRENSW','Axis Fire NSW Pty Ltd','92 694 548 546','NSW');
   return o;
 })();
 
@@ -406,7 +426,7 @@ let profiles = (()=>{
   const saved=store.get('bgg.profiles.v2',{}); const o={};
   STATES.forEach(s=>{
     o[s.code]=Object.assign({},DEFAULT_PROFILES[s.code],saved[s.code]||{});
-    if(!String(o[s.code].entity||'').trim()) o[s.code].entity=DEFAULT_PROFILES[s.code].entity; // older saves stored a blank name
+    ['entity','abn'].forEach(k=>{if(!String(o[s.code][k]||'').trim()) o[s.code][k]=DEFAULT_PROFILES[s.code][k]}); // older saves stored these blank
   });
   return o;
 })();
@@ -443,7 +463,10 @@ function parseDateCell(v){
 function normState(v){
   const s=String(v||'').trim(); if(!s) return '';
   const u=s.toUpperCase(); if(STATES.some(x=>x.code===u)) return u;
-  return STATE_ALIASES[s.toLowerCase()]||'';
+  const l=s.toLowerCase().replace(/\s+/g,' '), bare=t=>t.toLowerCase().replace(/\s+pty\.? ?ltd\.?$/,'').trim();
+  if(STATE_ALIASES[l]) return STATE_ALIASES[l];
+  const co=STATES.find(x=>x.co&&(bare(x.name)===bare(l)||x.label.toLowerCase()===l||bare(DEFAULT_PROFILES[x.code].entity)===bare(l)));
+  return co?co.code:'';
 }
 function safeName(s){return String(s).replace(/[\\\/:*?"<>|\r\n\t]+/g,' ').replace(/\s+/g,' ').trim().slice(0,110)}
 function downloadBlob(blob,name){
@@ -512,7 +535,7 @@ async function cleanLogo(src){
   return o.toDataURL('image/png');
 }
 async function fileLogos(code){
-  const key=LOGO_FILES[code]?code:'GROUP';
+  const sd=STATES.find(s=>s.code===code), want=sd&&sd.logo||code, key=LOGO_FILES[want]?want:'GROUP';
   if(_fileLogos[key]) return _fileLogos[key];
   const src=await cleanLogo(LOGO_FILES[key]);
   _fileLogos[key]={head:await containToJpeg(src,1250,463,'left'), slip:await containToJpeg(src,400,350)};
@@ -717,14 +740,17 @@ function initSplit(){
 /* ---------- chips ---------- */
 function makeChips(id,get,set){
   const box=$(id); box.innerHTML='';
+  const cos=document.createElement('div'); cos.className='cos';
   STATES.forEach(s=>{
     const b=document.createElement('button'); b.type='button'; b.className='chip'; b.setAttribute('role','radio'); b.dataset.code=s.code;
-    b.style.setProperty('--c',s.colour); b.innerHTML='<span>'+(s.code==='GROUP'?'GRP':s.code)+'</span><i></i>';
-    b.addEventListener('click',()=>{set(s.code);refreshChips(id,get)}); box.appendChild(b);
+    b.style.setProperty('--c',s.colour); b.innerHTML='<span>'+esc(s.co?s.label:s.code==='GROUP'?'GRP':s.code)+'</span><i></i>';
+    if(s.co) b.title=DEFAULT_PROFILES[s.code].entity;
+    b.addEventListener('click',()=>{set(s.code);refreshChips(id,get)}); (s.co?cos:box).appendChild(b);
   });
+  box.appendChild(cos);
   refreshChips(id,get);
 }
-function refreshChips(id,get){[...$(id).children].forEach(b=>b.setAttribute('aria-checked',b.dataset.code===get()?'true':'false'))}
+function refreshChips(id,get){$(id).querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-checked',b.dataset.code===get()?'true':'false'))}
 
 /* ---------- SINGLE tab ---------- */
 let sState='VIC';
@@ -812,7 +838,7 @@ function validateSingle(d){
   const p=profiles[d.state], m=[];
   if(!d.recipient) m.push('head contractor'); if(!d.project) m.push('project name');
   if(!d.bgs.length||d.bgs.some(b=>!b.no)) m.push('BG number'); if(d.bgs.some(b=>!b.amt)) m.push('BG value');
-  if(!p.entity||!p.abn) m.push('the '+d.state+' profile (company name, ABN)');
+  if(!p.entity||!p.abn) m.push('the '+stateLabel(d.state)+' profile (company name, ABN)');
   return m;
 }
 async function singleExport(kind){
@@ -839,7 +865,7 @@ function loadProfileForm(){
 async function refreshLogoBoxes(){
   const lg=await getLogos(pState); $('lg-head').src=lg.head; $('lg-slip').src=lg.slip;
   const o=logoOverrides[pState]||{};
-  $('p-logohint').textContent=o.head||o.slip?'Using a logo uploaded in this browser. Reset this state to go back to the official logo.':(pState==='GROUP'?'Using the Axis Services Group logo.':'Using the official '+stateDef(pState).name+' logo.');
+  $('p-logohint').textContent=o.head||o.slip?'Using a logo uploaded in this browser. Reset this state to go back to the official logo.':(()=>{const sd=stateDef(pState), lg=sd.logo||pState; return lg==='GROUP'?'Using the Axis Services Group logo.':'Using the official '+stateDef(lg).name+' logo.'})();
 }
 function profileEdited(){
   PROFILE_KEYS.forEach(k=>{profiles[pState][k]=$(PMAP[k]).value});
@@ -880,7 +906,7 @@ function buildTemplateWorkbook(){
   XLSX.utils.book_append_sheet(wb,ws2,'State Profiles');
   const ins=[['How to use'],
    ['1. Delete the example row on the Bank Guarantees sheet and add one row per project.'],
-   ['2. State: ACT, NSW, NT, QLD, SA, VIC, WA, NZ or Group (full names such as Victoria also work). It sets the logo and letterhead.'],
+   ['2. State: ACT, NSW, NT, QLD, SA, VIC, WA, NZ or Group (full names such as Victoria also work), or a company name: '+STATES.filter(s=>s.co).map(s=>s.name).join(', ')+'. It sets the logo and letterhead.'],
    ['3. Date: dd/mm/yy. Leave blank to use today.'],
    ['4. BG Value is the amount applied to every guarantee in the row. Use BGn Value only for a guarantee with a different amount.'],
    ['5. BGn Type is the suffix on each line, for example PC or DLP. Blank BG1 defaults to PC and blank BG2 to DLP. Leave BGn Number empty to skip a guarantee.'],
@@ -930,7 +956,7 @@ function parseWorkbook(wb){
     const rec=String(cell(row,c.rec)).trim(), proj=String(cell(row,c.proj)).trim();
     if(!state) errors.push(rawState?('unknown state "'+rawState+'"'):'state missing');
     if(!rec) errors.push('head contractor missing'); if(!proj) errors.push('project name missing'); if(!bgs.length) errors.push('no BG numbers');
-    if(state){const p=profiles[state]; if(!p.entity||!p.abn) errors.push(state+' profile incomplete');}
+    if(state){const p=profiles[state]; if(!p.entity||!p.abn) errors.push(stateLabel(state)+' profile incomplete');}
     const dateStr=parseDateCell(cell(row,c.date)); if(!dateStr) warnings.push('no date, using today');
     out.rows.push({n:r+1,d:{state,date:dateStr||todayStr(),recipient:rec,project:proj,bgs,signName:String(cell(row,c.sn)).trim(),signTitle:String(cell(row,c.st)).trim()},errors,warnings});
   }
@@ -941,7 +967,7 @@ function renderBatchTable(){
   if(!batchRows.length){wrap.innerHTML='';$('b-out').hidden=true;return}
   let h='<div class="tw"><table class="t"><thead><tr><th>Row</th><th>State</th><th>Project</th><th>Head contractor</th><th>BGs</th><th>Status</th><th></th></tr></thead><tbody>';
   batchRows.forEach((r,i)=>{
-    h+='<tr data-i="'+i+'" class="'+(i===batchSel?'sel':'')+'"><td>'+r.n+'</td><td>'+esc(r.d.state)+'</td><td class="w" title="'+esc(r.d.project)+'">'+esc(r.d.project)+'</td><td class="w" title="'+esc(r.d.recipient)+'">'+esc(r.d.recipient)+'</td><td>'+r.d.bgs.length+'</td><td>'+batchStatus(r)+'</td>'
+    h+='<tr data-i="'+i+'" class="'+(i===batchSel?'sel':'')+'"><td>'+r.n+'</td><td>'+esc(stateLabel(r.d.state))+'</td><td class="w" title="'+esc(r.d.project)+'">'+esc(r.d.project)+'</td><td class="w" title="'+esc(r.d.recipient)+'">'+esc(r.d.recipient)+'</td><td>'+r.d.bgs.length+'</td><td>'+batchStatus(r)+'</td>'
       +'<td><button class="lnk" type="button" aria-label="Edit row '+r.n+'">Edit</button></td></tr>';
   });
   h+='</tbody></table></div>';
@@ -993,7 +1019,7 @@ function revalidateBatchRow(r){
   if(!d.recipient) e.push('head contractor missing'); if(!d.project) e.push('project name missing');
   if(!d.bgs.length) e.push('no BG numbers');
   d.bgs.forEach((b,i)=>{if(!b.no) e.push('BG '+(i+1)+' has no number'); else if(!(b.amt>0)) e.push('BG '+b.no+' has no value')});
-  if(d.state){const p=profiles[d.state]; if(!p.entity||!p.abn) e.push(d.state+' profile incomplete');}
+  if(d.state){const p=profiles[d.state]; if(!p.entity||!p.abn) e.push(stateLabel(d.state)+' profile incomplete');}
   r.errors=e;
 }
 function batchEdited(){
