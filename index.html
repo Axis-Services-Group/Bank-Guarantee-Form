@@ -226,6 +226,10 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
           <div class="f"><label for="s-sname">Name</label><input type="text" id="s-sname"></div>
           <div class="f"><label for="s-stitle">Title</label><input type="text" id="s-stitle"></div>
         </div>
+        <div class="row">
+          <div class="f"><label for="s-sphone">Contact number</label><input type="text" id="s-sphone" class="mono" inputmode="tel"></div>
+          <div class="f"><label for="s-semail">Email</label><input type="text" id="s-semail" class="mono" inputmode="email"></div>
+        </div>
         <p class="hint">Defaults come from the state profile. Edit letterhead details in the State profiles tab.</p>
         <div class="logo-box sig-box">
           <span class="lbl">Signature</span>
@@ -276,6 +280,10 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
             <div class="f"><label for="be-sname">Signatory name</label><input type="text" id="be-sname"></div>
             <div class="f"><label for="be-stitle">Signatory title</label><input type="text" id="be-stitle"></div>
           </div>
+          <div class="row">
+            <div class="f"><label for="be-sphone">Signatory contact number</label><input type="text" id="be-sphone" class="mono" inputmode="tel"></div>
+            <div class="f"><label for="be-semail">Signatory email</label><input type="text" id="be-semail" class="mono" inputmode="email"></div>
+          </div>
         </div>
       </div>
       <div class="sec" id="b-out" hidden>
@@ -321,6 +329,10 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
         <div class="row">
           <div class="f"><label for="p-sname">Signatory name</label><input type="text" id="p-sname"></div>
           <div class="f"><label for="p-stitle">Signatory title</label><input type="text" id="p-stitle"></div>
+        </div>
+        <div class="row">
+          <div class="f"><label for="p-sphone">Signatory contact number</label><input type="text" id="p-sphone" class="mono"></div>
+          <div class="f"><label for="p-semail">Signatory email</label><input type="text" id="p-semail" class="mono"></div>
         </div>
       </div>
       <div class="sec">
@@ -386,10 +398,10 @@ const STATE_ALIASES = {
   'victoria':'VIC','new south wales':'NSW','queensland':'QLD','south australia':'SA','western australia':'WA',
   'northern territory':'NT','australian capital territory':'ACT','new zealand':'NZ','group':'GROUP','axis group':'GROUP','grp':'GROUP'
 };
-const PROFILE_KEYS = ['entity','abn','a1','a2','a3','a4','phone','fax','email','returnTo','signName','signTitle'];
+const PROFILE_KEYS = ['entity','abn','a1','a2','a3','a4','phone','fax','email','returnTo','signName','signTitle','signPhone','signEmail'];
 const DEFAULT_PROFILES = (()=>{
   const o={};
-  const blank=()=>({entity:'',abn:'',a1:'',a2:'',a3:'',a4:'',phone:'',fax:'',email:'',returnTo:'',signName:'',signTitle:''});
+  const blank=()=>({entity:'',abn:'',a1:'',a2:'',a3:'',a4:'',phone:'',fax:'',email:'',returnTo:'',signName:'',signTitle:'',signPhone:'',signEmail:''});
   // Company names follow the Axis Services VIC Pty Ltd convention for every state
   STATES.forEach(s=>{o[s.code]=blank(); o[s.code].entity='Axis Services '+(s.code==='GROUP'?'Group':s.code)+' Pty Ltd'});
   // Office addresses and phone numbers from the Axis office list
@@ -407,7 +419,7 @@ const DEFAULT_PROFILES = (()=>{
   // Companies: own name and ABN; office address from the state in the name (NSW office otherwise); slip return
   // address and signatory as for VIC. All editable in State profiles.
   const co=(c,entity,abn,office)=>{const src=o[office];
-    set(c,{entity,abn,a1:src.a1,a2:src.a2,a3:src.a3,a4:src.a4,phone:src.phone,returnTo:o.VIC.returnTo,signName:o.VIC.signName,signTitle:o.VIC.signTitle})};
+    set(c,{entity,abn,a1:src.a1,a2:src.a2,a3:src.a3,a4:src.a4,phone:src.phone,returnTo:o.VIC.returnTo,signName:o.VIC.signName,signTitle:o.VIC.signTitle,signPhone:o.VIC.signPhone,signEmail:o.VIC.signEmail})};
   co('SMALLWORKS','Axis Plumbing Small Works Group Pty Ltd','65 111 828 641','NSW');
   co('SIXAVIC','SIXA Services VIC Pty Ltd','18 644 613 258','VIC');
   co('MEDGAS','Axis Medical Gases Pty Ltd','31 604 062 259','NSW');
@@ -488,7 +500,9 @@ function bgCells(b){return ['BG: '+b.no, '$'+fmtMoney(b.amt), b.type||'']}
 function phoneLine(p){
   const a=[]; if(p.phone) a.push('P: '+p.phone); if(p.fax) a.push('F: '+p.fax); return a.join('   ');
 }
-function buildLetter(d){ // d: {state,date,recipient,project,bgs,signName,signTitle}
+// Contact lines under the signatory's title; only the ones filled in.
+function signContactLines(phone,email){const a=[]; if(phone.trim()) a.push('Phone: '+phone.trim()); if(email.trim()) a.push('Email: '+email.trim()); return a}
+function buildLetter(d){ // d: {state,date,recipient,project,bgs,signName,signTitle,signPhone,signEmail}
   const p=profiles[d.state]||DEFAULT_PROFILES.VIC;
   const signName=d.signName!=null&&d.signName!==''?d.signName:p.signName;
   return {
@@ -496,7 +510,8 @@ function buildLetter(d){ // d: {state,date,recipient,project,bgs,signName,signTi
     state:d.state, date:d.date||todayStr(), recipient:(d.recipient||'').toUpperCase(), project:d.project||'', bgs:d.bgs,
     entity:p.entity, abn:p.abn?('ABN: '+p.abn):'', a:[p.a1,p.a2,p.a3,p.a4], phone:phoneLine(p), email:p.email,
     ret:p.returnTo?('Please return slip to '+p.returnTo):'',
-    signName, signTitle:d.signTitle!=null&&d.signTitle!==''?d.signTitle:p.signTitle
+    signName, signTitle:d.signTitle!=null&&d.signTitle!==''?d.signTitle:p.signTitle,
+    signContact:signContactLines(d.signPhone||p.signPhone||'',d.signEmail||p.signEmail||'')
   };
 }
 
@@ -588,6 +603,7 @@ function letterHTML(L,logos){
     +'<div class="sigsp">'+(L.sig?'<img src="'+L.sig.src+'" alt="" style="width:'+L.sig.w+'px;height:'+L.sig.h+'px">':'')+'</div>'
     +'<div class="p" style="margin-left:48px">'+esc(L.signName)+'</div>'
     +'<div class="p" style="margin-left:48px">'+esc(L.signTitle)+'</div>'
+    +L.signContact.map(x=>'<div class="p" style="margin-left:48px">'+esc(x)+'</div>').join('')
     +'<div class="cut">✂</div>'
     +'<div class="p" style="margin-left:132px;position:relative;font-weight:700;font-style:italic">'
       +'<div class="slipbox" style="left:-167.7px;top:8.7px"><img src="'+logos.slip+'" alt=""></div>'+esc(L.ret)+'</div>'
@@ -632,6 +648,11 @@ async function buildDocx(L){
   if(L.sig){ // into the blank paragraph after the company name, after its paragraph properties
     const blank=doc.indexOf('</w:p>',doc.indexOf('{{ENTITY}}'))+6, at=doc.indexOf('</w:pPr>',blank)+8;
     doc=doc.slice(0,at)+await addDocxSignature(zip,L.sig)+doc.slice(at);
+  }
+  if(L.signContact.length){
+    const ti=doc.indexOf('{{SIGN_TITLE}}'), ts=doc.lastIndexOf('<w:p ',ti), te=doc.indexOf('</w:p>',ti)+6;
+    const tp=doc.slice(ts,te).replace(/ w14:paraId="[^"]*"/,'').replace(/ w14:textId="[^"]*"/,'');
+    doc=doc.slice(0,te)+L.signContact.map(x=>tp.replace('{{SIGN_TITLE}}',xe(x))).join('')+doc.slice(te);
   }
   const rep=(t,m)=>{for(const k in m)t=t.split('{{'+k+'}}').join(xe(m[k]));return t};
   doc=rep(doc,{DATE:L.date,RECIPIENT:L.recipient,PROJECT:L.project,ENTITY:L.entity,SIGN_NAME:L.signName,SIGN_TITLE:L.signTitle,RETURN_SLIP:L.ret,SLIP_COUNT:slipCount(L.bgs)});
@@ -775,11 +796,12 @@ function singleData(){
   const v=parseMoney($('s-value').value);
   const bgs=bgRows.filter(r=>r.no.trim()).map(r=>{const own=parseMoney(r.val);return {no:r.no.trim(),type:r.type.trim(),amt:isNaN(own)?(isNaN(v)?0:v):own}});
   return {state:sState,date:isoToStr($('s-date').value)||todayStr(),recipient:$('s-recipient').value.trim(),project:$('s-project').value.trim(),
-    bgs:bgs.length?bgs:[{no:'',type:'',amt:isNaN(v)?0:v}],signName:$('s-sname').value.trim(),signTitle:$('s-stitle').value.trim()};
+    bgs:bgs.length?bgs:[{no:'',type:'',amt:isNaN(v)?0:v}],signName:$('s-sname').value.trim(),signTitle:$('s-stitle').value.trim(),
+    signPhone:$('s-sphone').value.trim(),signEmail:$('s-semail').value.trim()};
 }
 function singleUpdate(){showPreview(buildLetter(singleData()))}
 function applyProfileToSingle(){
-  const p=profiles[sState]; $('s-sname').value=p.signName; $('s-stitle').value=p.signTitle;
+  const p=profiles[sState]; $('s-sname').value=p.signName; $('s-stitle').value=p.signTitle; $('s-sphone').value=p.signPhone||''; $('s-semail').value=p.signEmail||'';
   refreshSigBox();
 }
 
@@ -855,7 +877,7 @@ async function singleExport(kind){
 
 /* ---------- PROFILES tab ---------- */
 let pState='VIC';
-const PMAP={entity:'p-entity',abn:'p-abn',a1:'p-a1',a2:'p-a2',a3:'p-a3',a4:'p-a4',phone:'p-phone',fax:'p-fax',email:'p-email',returnTo:'p-ret',signName:'p-sname',signTitle:'p-stitle'};
+const PMAP={entity:'p-entity',abn:'p-abn',a1:'p-a1',a2:'p-a2',a3:'p-a3',a4:'p-a4',phone:'p-phone',fax:'p-fax',email:'p-email',returnTo:'p-ret',signName:'p-sname',signTitle:'p-stitle',signPhone:'p-sphone',signEmail:'p-semail'};
 function loadProfileForm(){
   const p=profiles[pState]; PROFILE_KEYS.forEach(k=>{$(PMAP[k]).value=p[k]||''});
   const complete=p.entity&&p.abn; const sd=stateDef(pState);
@@ -894,15 +916,15 @@ function buildTemplateWorkbook(){
   const wb=XLSX.utils.book_new();
   const head=['State','Date','Head Contractor','Project Name','BG Value'];
   for(let i=1;i<=BG_MAX;i++) head.push('BG'+i+' Number','BG'+i+' Type','BG'+i+' Value');
-  head.push('Signatory Name','Signatory Title');
-  const ex=['VIC','11/05/26','Hansen Yuncken Pty Ltd','Warrnambool Base Hospital Redevelopment -MW-Hydraulic Services',289918.59,'887195','PC','','887192','DLP','','','','','','','','',''];
+  head.push('Signatory Name','Signatory Title','Signatory Phone','Signatory Email');
+  const ex=['VIC','11/05/26','Hansen Yuncken Pty Ltd','Warrnambool Base Hospital Redevelopment -MW-Hydraulic Services',289918.59,'887195','PC','','887192','DLP','','','','','','','','','','',''];
   const ws=XLSX.utils.aoa_to_sheet([head,ex]);
-  ws['!cols']=head.map((h,i)=>({wch:i===2?28:i===3?58:i===17||i===18?24:12}));
+  ws['!cols']=head.map((h,i)=>({wch:i===2?28:i===3?58:i>=17?24:12}));
   XLSX.utils.book_append_sheet(wb,ws,'Bank Guarantees');
-  const ph=['State','Entity Name','ABN','Address Line 1','Address Line 2','Address Line 3','Address Line 4','Phone','Fax','Email','Return Slip To','Signatory Name','Signatory Title'];
-  const prow=STATES.map(s=>{const p=profiles[s.code];return [s.code,p.entity,p.abn,p.a1,p.a2,p.a3,p.a4,p.phone,p.fax,p.email,p.returnTo,p.signName,p.signTitle]});
+  const ph=['State','Entity Name','ABN','Address Line 1','Address Line 2','Address Line 3','Address Line 4','Phone','Fax','Email','Return Slip To','Signatory Name','Signatory Title','Signatory Phone','Signatory Email'];
+  const prow=STATES.map(s=>{const p=profiles[s.code];return [s.code,p.entity,p.abn,p.a1,p.a2,p.a3,p.a4,p.phone,p.fax,p.email,p.returnTo,p.signName,p.signTitle,p.signPhone,p.signEmail]});
   const ws2=XLSX.utils.aoa_to_sheet([ph].concat(prow));
-  ws2['!cols']=[8,30,16,24,24,24,24,16,16,36,40,22,28].map(w=>({wch:w}));
+  ws2['!cols']=[8,30,16,24,24,24,24,16,16,36,40,22,28,18,36].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb,ws2,'State Profiles');
   const ins=[['How to use'],
    ['1. Delete the example row on the Bank Guarantees sheet and add one row per project.'],
@@ -910,7 +932,7 @@ function buildTemplateWorkbook(){
    ['3. Date: dd/mm/yy. Leave blank to use today.'],
    ['4. BG Value is the amount applied to every guarantee in the row. Use BGn Value only for a guarantee with a different amount.'],
    ['5. BGn Type is the suffix on each line, for example PC or DLP. Blank BG1 defaults to PC and blank BG2 to DLP. Leave BGn Number empty to skip a guarantee.'],
-   ['6. Signatory Name and Title are optional and override the State Profiles sheet for that row.'],
+   ['6. Signatory Name, Title, Phone and Email are optional and override the State Profiles sheet for that row. Phone and email print under the signatory\'s title.'],
    ['7. The State Profiles sheet holds each state\'s company name, ABN, address, phone, fax, email, return slip address and signatory. Fill it in once; the app saves what you drop in.'],
    ['8. Need more than four guarantees? Add columns named BG5 Number, BG5 Type, BG5 Value and so on.']];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ins),'Instructions');
@@ -923,7 +945,7 @@ function parseWorkbook(wb){
   if(pn){
     const a=XLSX.utils.sheet_to_json(wb.Sheets[pn],{header:1,defval:''}); const hd=(a[0]||[]).map(hnorm);
     const idx=n=>hd.indexOf(n);
-    const cols={entity:idx('entityname'),abn:idx('abn'),a1:idx('addressline1'),a2:idx('addressline2'),a3:idx('addressline3'),a4:idx('addressline4'),phone:idx('phone'),fax:idx('fax'),email:idx('email'),returnTo:idx('returnslipto'),signName:idx('signatoryname'),signTitle:idx('signatorytitle')};
+    const cols={entity:idx('entityname'),abn:idx('abn'),a1:idx('addressline1'),a2:idx('addressline2'),a3:idx('addressline3'),a4:idx('addressline4'),phone:idx('phone'),fax:idx('fax'),email:idx('email'),returnTo:idx('returnslipto'),signName:idx('signatoryname'),signTitle:idx('signatorytitle'),signPhone:idx('signatoryphone'),signEmail:idx('signatoryemail')};
     const sc=idx('state');
     for(let r=1;r<a.length;r++){
       const code=normState(a[r][sc]); if(!code) continue; let touched=false;
@@ -935,7 +957,7 @@ function parseWorkbook(wb){
   const bn=wb.SheetNames.find(n=>hnorm(n)==='bankguarantees')||wb.SheetNames.find(n=>hnorm(n)!=='stateprofiles'&&hnorm(n)!=='instructions')||wb.SheetNames[0];
   const a=XLSX.utils.sheet_to_json(wb.Sheets[bn],{header:1,defval:'',raw:true}); if(!a.length) return out;
   const hd=(a[0]||[]).map(hnorm); const find=(...names)=>{for(const n of names){const i=hd.indexOf(n);if(i>=0)return i}return -1};
-  const c={state:find('state'),date:find('date'),rec:find('headcontractor','recipient','contractor','client'),proj:find('projectname','project'),val:find('bgvalue','value','amount','bgamount'),sn:find('signatoryname'),st:find('signatorytitle')};
+  const c={state:find('state'),date:find('date'),rec:find('headcontractor','recipient','contractor','client'),proj:find('projectname','project'),val:find('bgvalue','value','amount','bgamount'),sn:find('signatoryname'),st:find('signatorytitle'),sp:find('signatoryphone','signatorycontact','signatorycontactnumber'),se:find('signatoryemail')};
   const bgc={};
   hd.forEach((h,i)=>{const m=/^bg(\d+)(number|no|num|ref|type|value|amount)?$/.exec(h); if(!m) return; const n=+m[1], f=m[2]||'number';
     bgc[n]=bgc[n]||{}; if(['number','no','num','ref'].includes(f)) bgc[n].no=i; else if(f==='type') bgc[n].type=i; else bgc[n].val=i;});
@@ -958,7 +980,7 @@ function parseWorkbook(wb){
     if(!rec) errors.push('head contractor missing'); if(!proj) errors.push('project name missing'); if(!bgs.length) errors.push('no BG numbers');
     if(state){const p=profiles[state]; if(!p.entity||!p.abn) errors.push(stateLabel(state)+' profile incomplete');}
     const dateStr=parseDateCell(cell(row,c.date)); if(!dateStr) warnings.push('no date, using today');
-    out.rows.push({n:r+1,d:{state,date:dateStr||todayStr(),recipient:rec,project:proj,bgs,signName:String(cell(row,c.sn)).trim(),signTitle:String(cell(row,c.st)).trim()},errors,warnings});
+    out.rows.push({n:r+1,d:{state,date:dateStr||todayStr(),recipient:rec,project:proj,bgs,signName:String(cell(row,c.sn)).trim(),signTitle:String(cell(row,c.st)).trim(),signPhone:String(cell(row,c.sp)).trim(),signEmail:String(cell(row,c.se)).trim()},errors,warnings});
   }
   return out;
 }
@@ -1038,12 +1060,12 @@ function fillBatchEdit(){
   $('be-which').textContent='Edit letter '+(batchSel+1)+' (row '+r.n+')';
   refreshChips('chips-batch',()=>d.state);
   $('be-date').value=strToIso(d.date); $('be-recipient').value=d.recipient; $('be-project').value=d.project;
-  $('be-sname').value=d.signName; $('be-stitle').value=d.signTitle; batchSignPlaceholders();
+  $('be-sname').value=d.signName; $('be-stitle').value=d.signTitle; $('be-sphone').value=d.signPhone||''; $('be-semail').value=d.signEmail||''; batchSignPlaceholders();
   renderBatchBgs();
 }
 function batchSignPlaceholders(){
   const p=profiles[batchRows[batchSel].d.state]||{};
-  $('be-sname').placeholder=p.signName||''; $('be-stitle').placeholder=p.signTitle||'';
+  $('be-sname').placeholder=p.signName||''; $('be-stitle').placeholder=p.signTitle||''; $('be-sphone').placeholder=p.signPhone||''; $('be-semail').placeholder=p.signEmail||'';
 }
 function renderBatchBgs(){
   const bgs=batchRows[batchSel].d.bgs, box=$('be-bgs'); box.innerHTML='';
@@ -1141,7 +1163,7 @@ function init(){
   applyProfileToSingle();
   makeChips('chips-single',()=>sState,c=>{sState=c;applyProfileToSingle();singleUpdate()});
   makeChips('chips-prof',()=>pState,c=>{pState=c;loadProfileForm();tabRefresh()});
-  ['s-date','s-value','s-recipient','s-project','s-sname','s-stitle'].forEach(id=>$(id).addEventListener('input',singleUpdate));
+  ['s-date','s-value','s-recipient','s-project','s-sname','s-stitle','s-sphone','s-semail'].forEach(id=>$(id).addEventListener('input',singleUpdate));
   $('addbg').addEventListener('click',()=>{bgRows.push({no:'',type:'',val:''});renderBgRows();$('bg-n'+(bgRows.length-1)).focus()});
   $('dl-pdf').addEventListener('click',()=>singleExport('pdf')); $('dl-docx').addEventListener('click',()=>singleExport('docx'));
   PROFILE_KEYS.forEach(k=>$(PMAP[k]).addEventListener('input',profileEdited));
@@ -1171,7 +1193,7 @@ function init(){
     r.warnings=r.warnings.filter(w=>!/^no date/.test(w)); if(!e.target.value) r.warnings.push('no date, using today');
     batchEdited();
   });
-  [['be-recipient','recipient'],['be-project','project'],['be-sname','signName'],['be-stitle','signTitle']].forEach(([id,k])=>
+  [['be-recipient','recipient'],['be-project','project'],['be-sname','signName'],['be-stitle','signTitle'],['be-sphone','signPhone'],['be-semail','signEmail']].forEach(([id,k])=>
     $(id).addEventListener('input',e=>{bd()[k]=e.target.value.trim();batchEdited()}));
   $('be-addbg').addEventListener('click',()=>{const bgs=bd().bgs;bgs.push({no:'',type:'',amt:bgs.length?bgs[0].amt:0});renderBatchBgs();batchEdited();$('be-n'+(bgs.length-1)).focus()});
   $('be-done').addEventListener('click',()=>{$('b-edit').hidden=true});
